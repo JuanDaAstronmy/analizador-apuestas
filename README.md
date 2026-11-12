@@ -16,7 +16,20 @@ conservador y cómo usar mejor una apuesta gratis. Además lleva la bitácora de
 3. Escanea el código QR con Expo Go (el celular y el computador deben estar en la misma red Wi-Fi).
 
 Todas las librerías nativas que usa (AsyncStorage, SVG, safe-area) vienen incluidas en Expo Go, así
-que no hace falta compilar nada. Para un APK instalable: `npx eas-cli@latest build -p android --profile preview`.
+que no hace falta compilar nada.
+
+### Generar un APK (instalar sin computador)
+
+El APK se compila gratis en los servidores de Expo (EAS Build), no en tu computador:
+
+```bash
+npm install
+npx eas-cli@latest login                                 # cuenta gratis en expo.dev
+npx eas-cli@latest build -p android --profile preview   # la primera vez: responde "Y" a todo
+```
+
+Tarda unos 10–20 minutos. Al terminar muestra un enlace y un código QR: ábrelo en el celular,
+descarga el `.apk` e instálalo (Android pedirá permitir "instalar apps de origen desconocido").
 
 ## Pestañas
 
