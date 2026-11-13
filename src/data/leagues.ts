@@ -50,10 +50,19 @@ export function fixturesUrl(league: League): string {
   return league.kind === 'new' ? `${BASE}/new_league_fixtures.csv` : `${BASE}/fixtures.csv`;
 }
 
-async function getText(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} al descargar ${url}`);
-  return res.text();
+async function getText(url: string, timeoutMs = 45000): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} al descargar ${url}`);
+    return await res.text();
+  } catch (e) {
+    const msg = ctrl.signal.aborted ? `tiempo de espera agotado (${timeoutMs / 1000} s)` : e instanceof Error ? e.message : String(e);
+    throw new Error(`${url.replace('https://', '')}: ${msg}`);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Filtra filas de un CSV de próximos partidos que pertenecen a la liga. */
@@ -69,11 +78,12 @@ export interface LeagueData {
 }
 
 export async function loadLeague(league: League, now = new Date()): Promise<LeagueData> {
+  const errors: string[] = [];
   const texts = await Promise.all(
     historyUrls(league, now).map((u) =>
       getText(u).catch((e) => {
         // La temporada actual puede no existir aún al inicio; no es fatal.
-        console.warn(String(e));
+        errors.push(e instanceof Error ? e.message : String(e));
         return '';
       }),
     ),
@@ -82,7 +92,10 @@ export async function loadLeague(league: League, now = new Date()): Promise<Leag
     .flatMap((t) => (t ? rowsToMatches(parseCsv(t), league.code) : []))
     .filter((m) => m.hg !== undefined)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
-  if (history.length === 0) throw new Error('No se pudieron descargar datos históricos de esta liga.');
+  if (history.length === 0)
+    throw new Error(
+      'No se pudieron descargar datos históricos de esta liga.' + (errors.length ? `\nDetalle: ${errors.join(' | ')}` : ''),
+    );
 
   let fixtures: Match[] = [];
   try {
