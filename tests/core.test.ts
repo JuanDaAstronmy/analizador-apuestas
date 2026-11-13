@@ -11,7 +11,7 @@ import { runBacktest, DEFAULT_BACKTEST } from '../src/core/backtest';
 import { simulateBankroll } from '../src/core/montecarlo';
 import { syntheticLeague } from '../src/core/synthetic';
 import { RISK_PROFILES } from '../src/core/types';
-import { seasonCode, filterFixtureRows, LEAGUES } from '../src/data/leagues';
+import { seasonCode, filterFixtureRows, LEAGUES, candidateUrls } from '../src/data/leagues';
 
 const close = (a: number, b: number, tol: number, msg?: string) => assert.ok(Math.abs(a - b) <= tol, msg ?? `${a} ≉ ${b}`);
 
@@ -183,4 +183,11 @@ test('utilidades de ligas', () => {
   assert.equal(seasonCode(new Date(2026, 2, 1)), '2526');
   const arg = LEAGUES.find((l) => l.code === 'ARG')!;
   assert.equal(filterFixtureRows([{ Country: 'Argentina' }, { Country: 'Mexico' }], arg).length, 1);
+});
+
+test('las descargas prueban primero la copia en GitHub', () => {
+  const urls = candidateUrls('https://football-data.co.uk/mmz4281/2627/E0.csv');
+  assert.equal(urls.length, 2);
+  assert.ok(urls[0].endsWith('/releases/download/datos/mmz4281_2627_E0.csv'));
+  assert.equal(urls[1], 'https://football-data.co.uk/mmz4281/2627/E0.csv');
 });

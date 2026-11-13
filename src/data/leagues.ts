@@ -33,6 +33,18 @@ export const LEAGUES: League[] = [
 ];
 
 const BASE = 'https://football-data.co.uk';
+/**
+ * Copia de los mismos CSV publicada por GitHub Actions (.github/workflows/datos.yml).
+ * Se intenta primero porque football-data.co.uk está bloqueado en algunas redes.
+ */
+const MIRROR = 'https://github.com/JuanDaAstronmy/analizador-apuestas/releases/download/datos';
+
+/** URLs a probar en orden para un archivo de football-data.co.uk. */
+export function candidateUrls(url: string): string[] {
+  if (!url.startsWith(BASE + '/')) return [url];
+  const path = url.slice(BASE.length + 1);
+  return [`${MIRROR}/${path.replace(/\//g, '_')}`, url];
+}
 
 /** Código de temporada europea para una fecha: nov-2026 → "2627". */
 export function seasonCode(d: Date, offset = 0): string {
@@ -50,7 +62,20 @@ export function fixturesUrl(league: League): string {
   return league.kind === 'new' ? `${BASE}/new_league_fixtures.csv` : `${BASE}/fixtures.csv`;
 }
 
-async function getText(url: string, timeoutMs = 45000): Promise<string> {
+/** Descarga probando primero la copia en GitHub y luego la fuente original. */
+async function getText(url: string): Promise<string> {
+  const errors: string[] = [];
+  for (const u of candidateUrls(url)) {
+    try {
+      return await getTextOnce(u);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  throw new Error(errors.join(' / '));
+}
+
+async function getTextOnce(url: string, timeoutMs = 30000): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -59,7 +84,7 @@ async function getText(url: string, timeoutMs = 45000): Promise<string> {
     return await res.text();
   } catch (e) {
     const msg = ctrl.signal.aborted ? `tiempo de espera agotado (${timeoutMs / 1000} s)` : e instanceof Error ? e.message : String(e);
-    throw new Error(`${url.replace('https://', '')}: ${msg}`);
+    throw new Error(`${url.replace('https://', '').replace(MIRROR.replace('https://', ''), 'github')}: ${msg}`);
   } finally {
     clearTimeout(timer);
   }
