@@ -3,25 +3,30 @@ Colombia. Trabaja solo, sin hacer preguntas, y termina con un resumen de 3 líne
 
 1. Prepara el código (repositorio público):
    git clone --depth 1 https://github.com/JuanDaAstronmy/analizador-apuestas /tmp/aa && cd /tmp/aa
-   npm ci && pip install -r requirements.txt
+   npm ci && pip install -r requirements.txt && mkdir -p salida
 
-2. Ventana: mira el día de hoy en hora de Colombia (TZ=America/Bogota date +%u).
-   1=lunes → `lunes`, 2=martes → `martes`, 4=jueves → `jueves`, 5=viernes → `viernes`.
-   Cualquier otro día: usa la ventana del día de ejecución más cercano anterior de esa lista.
-   FECHA = fecha de hoy en Colombia (YYYY-MM-DD).
+2. Ventana y hora (todo en hora de Colombia: `TZ=America/Bogota date`):
+   - Martes → ventana `martes` (partidos de martes a jueves). Viernes → ventana `viernes` (viernes a lunes).
+     Otro día (ejecución manual): usa `martes` si es lunes–jueves y `viernes` si es viernes–domingo.
+   - FECHA = fecha de hoy en Colombia (YYYY-MM-DD). El archivo se llamará `Apuestas_<FECHA>_<ventana>.xlsx`.
+   - Esta tarea corre dos veces esos días: 5:13 am (temprana) y 8:13 am (respaldo).
+     * Si ya existe en Drive un archivo con el nombre de hoy (paso 3), termina sin hacer nada.
+     * Corrida temprana (antes de las 7 am): revisa `curl -sI https://football-data.co.uk/fixtures.csv` (Last-Modified).
+       Si NO se actualizó hoy (fecha UTC de hoy), termina sin crear archivo: la corrida de respaldo lo hará.
+     * Corrida de respaldo: genera el archivo siempre (si no hay partidos, el Excel trae la nota que lo explica).
 
 3. Google Drive (conector Google Drive):
    - Busca la carpeta: search_files con `title = 'Apuestas Claude' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`.
-     Si no existe, créala con create_file (contentMimeType no; mimeType de carpeta: `application/vnd.google-apps.folder`, title `Apuestas Claude`).
+     (Ya existe; id 1KkYr9bkboU4qbxfHvqh7RGzecYW9p4n0. Si no apareciera, créala con create_file: title `Apuestas Claude`,
+     contentMimeType `application/vnd.google-apps.folder`.) Ignora archivos cuyo nombre no empiece por `Apuestas_` (p. ej. el ejemplo).
    - Lista los Excel: search_files con `parentId = '<id carpeta>' and title contains 'Apuestas_' and trashed = false`.
      Ordénalos por la FECHA DEL NOMBRE (Apuestas_AAAA-MM-DD_…), no por fecha de modificación, y toma los 2 más
-     recientes. Descarga cada uno con download_file_content y guárdalo decodificado (base64) como
-     /tmp/aa/salida/anterior1.xlsx (el más viejo) y /tmp/aa/salida/anterior2.xlsx (el más nuevo). Si alguno es un
+     recientes. Descarga cada uno con download_file_content: el resultado indica la ruta local donde quedó el archivo;
+     cópialo como /tmp/aa/salida/anterior1.xlsx (el más viejo) y /tmp/aa/salida/anterior2.xlsx (el más nuevo). Si alguno es un
      Google Sheets (no .xlsx), descárgalo con exportMimeType `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
      Si solo hay uno o ninguno, usa los que haya.
 
 4. Genera:
-   mkdir -p salida
    python3 scripts/leer_historial.py salida/anterior1.xlsx salida/anterior2.xlsx > salida/historial.json   # los que existan
    bash scripts/descargar_datos.sh /tmp/aa/datos
    npx tsx scripts/picks.ts --ventana <VENTANA> --fecha <FECHA> --datos /tmp/aa/datos --historial salida/historial.json --salida salida/picks.json
