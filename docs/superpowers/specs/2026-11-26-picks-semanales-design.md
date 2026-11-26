@@ -1,6 +1,6 @@
 # Diseño: Excel de apuestas recomendadas (lunes y jueves)
 
-Fecha: 2026-11-26 · Estado: borrador para aprobación
+Fecha: 2026-11-26 · Estado: listo para aprobación
 
 ## 1. Intención (el porqué)
 
@@ -41,7 +41,8 @@ rachas**.
   considera malas (las rachas se sobrevaloran fácilmente): el ajuste debe tener **tope**.
 - Lenguaje técnico (log-loss, Kelly, overround…) en el Excel.
 - Prometer ganancias o esconder el riesgo: cada archivo muestra cuánto se pierde si falla.
-- Recomendar stakes que pongan en juego más de ~1/4 del saldo en una sola apuesta.
+- Esconder el tamaño del riesgo: si una apuesta es más de 1/4 del saldo, se muestra un aviso en rojo
+  (el usuario decidió seguir apostando el mínimo aunque el saldo baje; ver 6).
 
 ## 3. Restricciones
 
@@ -105,8 +106,12 @@ rachas**.
 ### 5.4 Selección y orden
 - Candidatas: todas las selecciones de todos los partidos de la ventana (lunes→jueves o
   viernes→domingo).
-- Filtro: cuota de referencia entre **1.20 y 1.60** (rango útil para la meta del 5 % con mínimo de
-  $500 y stake ≤ ~25 % del saldo) y probabilidad final ≥ **70 %**.
+- **Cuota de referencia**: para mercados con cuotas en los datos, la del mercado (Avg). Para mercados
+  derivados sin precio (doble oportunidad, más de 1.5, ambos marcan, córners, tarjetas…), la cuota
+  justa **con el margen típico de BetPlay (7,5 %)**: cuota = 1 / (p × 1.075). *(Decisión de Claude:
+  medido en las capturas de BetPlay del usuario.)* Lo mismo para "no apuestes si tu casa paga menos de"
+  = 1 / p_final (cuota justa, el punto de equilibrio).
+- Filtro: cuota de referencia entre **1.20 y 1.60** y probabilidad final ≥ **70 %**.
 - Orden: por probabilidad final; desempate por "margen de seguridad" (prob. final − prob. implícita
   de la cuota).
 - Máximo **10** recomendaciones por archivo y **máximo 2 por partido**; se prioriza variedad de
@@ -118,8 +123,12 @@ Nombre: `Apuestas_AAAA-MM-DD_(lunes|jueves).xlsx`, en una carpeta de Drive **"Ap
 (se crea si no existe).
 
 **Hoja 1 "Apuestas de hoy"** (lo primero que ve):
-- Arriba: celda **"Mi saldo"** (editable, por defecto el último saldo conocido o $2.200), meta del
-  5 % y apuesta mínima $500. Los stakes se recalculan con fórmulas al cambiar el saldo.
+- Arriba: celda **"Mi saldo"** (editable). Valor por defecto: el saldo calculado en la hoja "Mis
+  apuestas" del archivo anterior en Drive; si no existe, $2.200. *(Decisión de Claude.)* Meta del 5 %
+  y apuesta mínima $500. Stake = máx(500, 5 % × saldo / (cuota − 1)), recalculado con fórmulas.
+- **Saldo bajo (decisión del usuario, opción 1):** se sigue recomendando con el mínimo de $500 aunque
+  el saldo baje; si el stake supera 1/4 del saldo, la fila muestra en rojo "Esta apuesta es X % de tu
+  saldo". Solo se deja de recomendar si el saldo es menor que $500.
 - Una fila por recomendación: fecha y hora (Colombia), liga, partido, **apuesta en palabras simples**
   ("Gana el Inter", "Habrá 3 goles o más", "El Getafe no pierde"), cuota de referencia,
   **"no apuestes si tu casa paga menos de"**, probabilidad aproximada ("8 de cada 10"), cuánto
@@ -130,8 +139,28 @@ Nombre: `Apuestas_AAAA-MM-DD_(lunes|jueves).xlsx`, en una carpeta de Drive **"Ap
 **Hoja 2 "Cómo usar"**: 6–8 líneas: confirmar la cuota en tu casa, una sola apuesta a la vez, si
 pierdes 2 seguidas descansa hasta el siguiente archivo, qué significa cada tipo de apuesta.
 
-**Hoja 3 "Historial"**: todas las recomendaciones anteriores con resultado (✅/❌), y un resumen:
-aciertos, % de acierto, y cuánto habría ganado/perdido siguiendo la regla del 5 %.
+**Hoja 3 "Mis apuestas"** (lo que el usuario llena; se arrastra de archivo en archivo):
+- Preguntas por fila, en lenguaje simple: **¿Cuál apostaste?** (lista desplegable con las
+  recomendaciones o "otra, idea mía"), **¿En qué casa?**, **¿Cuánto apostaste?**, **¿Qué cuota te
+  dieron de verdad?**, **¿Ganó?** (se prellena solo cuando la tarea conoce el resultado; el usuario
+  puede corregirlo), **¿Por qué la elegiste? / tu intuición** (texto libre: la "parte humana").
+- Columnas calculadas: ganancia/pérdida, saldo después de cada apuesta, ganancia esperada de esa
+  apuesta (stake × (p × cuota real − 1)).
+- Cada ejecución lee esta hoja del archivo anterior en Drive y la copia al nuevo (no se pierde nada).
+  Si el usuario no llenó nada, queda vacía.
+- Resumen: apuestas hechas, aciertos, ganancia real, ganancia esperada, y **comparación "recomendadas
+  por Claude" vs "ideas mías"** (aciertos y ganancia de cada grupo).
+
+**Gráficas** (gráficas nativas de Excel, se actualizan solas al escribir en "Mis apuestas"):
+1. **Mi saldo real vs esperado**: línea del saldo real después de cada apuesta, línea del saldo
+   esperado (sumando la ganancia esperada de cada apuesta) y línea de la meta ideal (+5 % por
+   apuesta ganada seguida).
+2. **Cómo le va a las recomendaciones** (hoja "Historial"): aciertos acumulados de todas las
+   recomendaciones vs lo que se esperaba según sus probabilidades.
+
+**Hoja 4 "Historial"**: todas las recomendaciones anteriores con resultado (✅/❌) aunque el usuario
+no las haya apostado, y un resumen: aciertos, % de acierto, y cuánto habría ganado/perdido siguiendo
+la regla del 5 % desde $2.200.
 
 ## 7. Historial y aprendizaje
 - Cada ejecución guarda sus recomendaciones en el repo (`picks/historial.json`) y hace commit.
@@ -140,12 +169,19 @@ aciertos, % de acierto, y cuánto habría ganado/perdido siguiendo la regla del 
   rinden mejor.
 
 ## 8. Automatización
-- Código nuevo en el repo `analizador-apuestas` (TypeScript, reutiliza `src/core`), script
-  `scripts/picks.ts` que genera el .xlsx (librería `exceljs`).
+- Código nuevo en el repo `analizador-apuestas`: el modelo en TypeScript (reutiliza `src/core`),
+  `scripts/picks.ts`, produce las recomendaciones en JSON; un script Python con **openpyxl** arma el
+  .xlsx (openpyxl soporta gráficas nativas de Excel, que `exceljs` no). *(Decisión de Claude.)*
+- Antes de generar, la tarea descarga de Drive el archivo anterior para leer "Mi saldo" y "Mis
+  apuestas".
 - **Tarea programada** de Claude: lunes y jueves ~07:15 (Colombia), nueva sesión cada vez, con el
   conector Google Drive. Instrucciones: actualizar repo, correr el script, revisar el resultado
   (sanidad: hay partidos, cuotas razonables), subir el .xlsx a Drive, commit del historial.
-- Workflow `datos.yml` pasa a correr **todos los días** a las 06:23 (Colombia).
+- Workflow `datos.yml` pasa a correr **todos los días** a las 06:23 (Colombia) y descarga también las
+  ligas de `new_league_fixtures.csv` que hoy no baja (Japón, Noruega, Suecia, Austria, etc.), para
+  tener historia y rachas de todas las ligas con partidos próximos. *(Decisión de Claude.)*
+- **Tarjetas**: cada tarjeta cuenta 1 (amarilla o roja). *(Decisión de Claude; si la casa del usuario
+  cuenta distinto, se ajusta.)*
 - Si no hay partidos publicados en la ventana, el archivo se sube igual con una nota clara
   ("aún no hay cuotas de los partidos del fin de semana") y lo que sí haya.
 
