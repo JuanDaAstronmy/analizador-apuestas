@@ -37,3 +37,45 @@ test('visitante favorito da más goles al visitante', () => {
   const { lh, la } = fitLambdasToMarket({ home: 0.17, draw: 0.25, away: 0.58, over25: 0.45 });
   assert.ok(la > lh);
 });
+
+import { teamGames, weightedMean, streaks, streakWeight } from '../src/picks/teamForm';
+
+const row = (d: string, h: string, a: string, hg: string, ag: string, extra: Record<string, string> = {}) =>
+  ({ Date: d, HomeTeam: h, AwayTeam: a, FTHG: hg, FTAG: ag, ...extra });
+
+test('weightedMean: 50 % últimos 3, 30 % del 4 al 8, 20 % resto', () => {
+  assert.ok(Math.abs(weightedMean([3, 3, 3, 0, 0, 0, 0, 0, 0, 0]) - 1.5) < 1e-9);
+  assert.equal(weightedMean([2]), 2);
+  assert.ok(Number.isNaN(weightedMean([])));
+});
+
+test('streaks cuenta rachas desde el partido más reciente', () => {
+  const rows = [1, 2, 3, 4, 5, 6].map((d) => row(`0${d}/11/2026`, 'Inter', 'X' + d, '2', '0'));
+  rows.push(row('20/10/2026', 'Inter', 'Y', '0', '1'));
+  const g = teamGames(rows, 'Inter', new Date('2026-11-20'));
+  assert.equal(g.length, 7);
+  assert.equal(g[0].date.getUTCDate(), 6);
+  const s = streaks(g);
+  assert.equal(s.gana, 6);
+  assert.equal(s.noPierde, 6);
+  assert.equal(s.sinRecibir, 6);
+  assert.equal(s.pierde, 0);
+});
+
+test('streakWeight: nada antes de 5, satura en 10+', () => {
+  assert.equal(streakWeight(4), 0);
+  assert.ok(streakWeight(5) > 0);
+  assert.equal(streakWeight(10), 1);
+  assert.equal(streakWeight(15), 1);
+});
+
+test('teamGames lee córners, tarjetas, xG y árbitro, ignora filas sin goles y partidos futuros', () => {
+  const rows = [
+    row('01/11/2026', 'Leeds', 'Hull', '1', '1', { HC: '7', AC: '3', HY: '2', HR: '1', AY: '1', AR: '0', HxG: '1.4', AxG: '0.6', Referee: 'A Taylor' }),
+    row('05/11/2026', 'Hull', 'Leeds', '', ''),
+    row('25/11/2026', 'Hull', 'Leeds', '3', '0'),
+  ];
+  const g = teamGames(rows, 'Hull', new Date('2026-11-20'));
+  assert.equal(g.length, 1);
+  assert.deepEqual([g[0].home, g[0].gf, g[0].ga, g[0].cf, g[0].ca, g[0].cardsFor, g[0].cardsAgainst, g[0].xgf, g[0].ref], [false, 1, 1, 3, 7, 1, 3, 0.6, 'A Taylor']);
+});
