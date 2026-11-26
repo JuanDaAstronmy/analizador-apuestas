@@ -79,3 +79,61 @@ test('teamGames lee córners, tarjetas, xG y árbitro, ignora filas sin goles y 
   assert.equal(g.length, 1);
   assert.deepEqual([g[0].home, g[0].gf, g[0].ga, g[0].cf, g[0].ca, g[0].cardsFor, g[0].cardsAgainst, g[0].xgf, g[0].ref], [false, 1, 1, 3, 7, 1, 3, 0.6, 'A Taylor']);
 });
+
+import { nbOverProb } from '../src/picks/counts';
+import { buildCandidates, LeagueContext } from '../src/picks/candidates';
+import { syntheticLeague } from '../src/core/synthetic';
+import { fairProbs } from '../src/core/betting';
+
+function syntheticRows(): Record<string, string>[] {
+  const { matches } = syntheticLeague({ seasons: 2, start: new Date(Date.UTC(2025, 0, 10, 12)) });
+  return matches.map((m, i) => {
+    const d = m.date;
+    const dd = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+    return { Date: dd, HomeTeam: m.home, AwayTeam: m.away, FTHG: String(m.hg), FTAG: String(m.ag), HC: String(4 + (i % 5)), AC: String(3 + (i % 4)), HY: String(i % 3), HR: '0', AY: String((i + 1) % 3), AR: '0', Referee: i % 2 ? 'Ref A' : 'Ref B' };
+  });
+}
+const ctx = (rows: Record<string, string>[]): LeagueContext => ({ rows, cornersR: 40, cardsR: 30 });
+const FX_DATE = new Date(Date.UTC(2027, 0, 20, 15));
+
+test('nbOverProb con dispersión enorme es Poisson', () => {
+  let cdf = 0, p = Math.exp(-9.5);
+  for (let k = 0; k <= 9; k++) { cdf += p; p = (p * 9.5) / (k + 1); }
+  assert.ok(Math.abs(nbOverProb(9.5, 1e7, 9.5) - (1 - cdf)) < 0.005);
+});
+
+test('con cuotas, las probabilidades 1X2 quedan a ±6 puntos del mercado', () => {
+  const rows = syntheticRows();
+  const odds = { home: 5.75, draw: 3.85, away: 1.65, over25: 2.08, under25: 1.72 };
+  const c = buildCandidates({ league: 'SP1', date: FX_DATE, home: 'Equipo T', away: 'Equipo A', odds }, ctx(rows));
+  const fair = fairProbs([odds.home, odds.draw, odds.away]);
+  const p1 = c.find((x) => x.key === '1X2:1')!.prob;
+  const p2 = c.find((x) => x.key === '1X2:2')!.prob;
+  assert.ok(Math.abs(p1 - fair[0]) <= 0.0601, `p1=${p1} vs ${fair[0]}`);
+  assert.ok(Math.abs(p2 - fair[2]) <= 0.0601, `p2=${p2} vs ${fair[2]}`);
+  assert.ok(c.find((x) => x.key === '1X2:2')!.hasMarketPrice);
+  assert.ok(c.some((x) => x.key.startsWith('CORN:')) && c.some((x) => x.key.startsWith('CARD:')));
+});
+
+test('sin cuotas todo sale sin precio de mercado y con confianza media', () => {
+  const c = buildCandidates({ league: 'SP1', date: FX_DATE, home: 'Equipo C', away: 'Equipo K' }, ctx(syntheticRows()));
+  assert.ok(c.length > 10);
+  assert.ok(c.every((x) => !x.hasMarketPrice && x.confidence === 'media'));
+});
+
+test('equipo con un solo partido no produce NaN', () => {
+  const rows = syntheticRows();
+  rows.push({ Date: '10/01/2027', HomeTeam: 'Nuevo FC', AwayTeam: 'Equipo B', FTHG: '1', FTAG: '1', HC: '5', AC: '5', HY: '2', HR: '0', AY: '1', AR: '0' });
+  const c = buildCandidates({ league: 'SP1', date: FX_DATE, home: 'Nuevo FC', away: 'Equipo C', odds: { home: 2.5, draw: 3.2, away: 2.9 } }, ctx(rows));
+  assert.ok(c.length > 0);
+  for (const x of c) assert.ok(Number.isFinite(x.prob) && Number.isFinite(x.refOdds) && Number.isFinite(x.minOdds), x.key);
+});
+
+test('textos en lenguaje sencillo', () => {
+  const c = buildCandidates({ league: 'SP1', date: FX_DATE, home: 'Equipo A', away: 'Equipo T', odds: { home: 1.3, draw: 5.5, away: 9 } }, ctx(syntheticRows()));
+  for (const x of c) {
+    assert.ok(!/λ|kelly|overround|log-loss/i.test(x.label + x.reason), x.label);
+    assert.ok(x.reason.length > 10);
+  }
+  assert.ok(c.find((x) => x.key === '1X2:1')!.label.includes('Equipo A'));
+});
