@@ -179,3 +179,38 @@ test('windowFor también soporta martes (mar→jue) y viernes (vie→lun)', () =
   assert.equal(v.from.toISOString(), '2026-11-27T05:00:00.000Z');
   assert.equal(v.to.toISOString(), '2026-12-01T04:59:59.999Z');
 });
+
+import { settle, settleAll, mergeHistory, HistEntry } from '../src/picks/settle';
+
+const hist = (key: string, extra: Partial<HistEntry> = {}): HistEntry => ({
+  ...cand('E0|Leeds|Hull|2026-11-28', key, 0.8, 1.3), league: 'E0', home: 'Leeds', away: 'Hull', date: '2026-11-28T15:00:00.000Z',
+  archivo: 'Apuestas_2026-11-27_viernes.xlsx', resultado: 'pendiente', ...extra,
+});
+const resRow = (hg: string, ag: string, extra: Record<string, string> = {}) =>
+  ({ __league: 'E0', Date: '28/11/2026', HomeTeam: 'Leeds', AwayTeam: 'Hull', FTHG: hg, FTAG: ag, ...extra });
+const NOW = new Date('2026-11-30T12:00:00Z');
+
+test('settle: goles, córners y tarjetas (cada tarjeta cuenta 1)', () => {
+  assert.equal(settle(hist('OU:2.5:over'), [resRow('2', '1')], NOW).resultado, 'ganada');
+  assert.equal(settle(hist('OU:2.5:over'), [resRow('2', '1')], NOW).marcador, '2-1');
+  assert.equal(settle(hist('CORN:8.5:over'), [resRow('1', '0', { HC: '5', AC: '3' })], NOW).resultado, 'perdida');
+  assert.equal(settle(hist('CARD:3.5:over'), [resRow('1', '0', { HY: '2', HR: '1', AY: '1', AR: '0' })], NOW).resultado, 'ganada');
+  assert.equal(settle(hist('DC:X2'), [resRow('1', '1')], NOW).resultado, 'ganada');
+  assert.equal(settle(hist('AH:H:-1.5'), [resRow('2', '1')], NOW).resultado, 'perdida');
+  assert.equal(settle(hist('TG:A:0.5:over'), [resRow('2', '1')], NOW).resultado, 'ganada');
+});
+
+test('settle: sin resultado sigue pendiente aunque pasen días', () => {
+  assert.equal(settle(hist('1X2:1'), [], new Date('2026-12-10T12:00:00Z')).resultado, 'pendiente');
+  assert.equal(settle(hist('CORN:8.5:over'), [resRow('1', '0')], NOW).resultado, 'pendiente');
+});
+
+test('settleAll no toca las ya liquidadas y mergeHistory no duplica', () => {
+  const done = hist('1X2:1', { resultado: 'perdida', marcador: '0-1' });
+  assert.equal(settleAll([done], [resRow('3', '0')], NOW)[0].resultado, 'perdida');
+  const pick = cand('E0|Leeds|Hull|2026-11-28', 'BTTS:yes', 0.75, 1.4);
+  const once = mergeHistory([], [pick], 'a.xlsx');
+  const twice = mergeHistory(once, [pick], 'a.xlsx');
+  assert.equal(twice.length, 1);
+  assert.equal(twice[0].resultado, 'pendiente');
+});
