@@ -17,8 +17,16 @@ export const DEFAULT_CHOOSE: ChooseOptions = { minOdds: 1.2, maxOdds: 1.6, minPr
  * si faltan cupos, se completan con las mejores restantes.
  */
 export function choosePicks(cands: Candidate[], o: ChooseOptions = DEFAULT_CHOOSE): Candidate[] {
+  // Con base de mercado ('alta'): la cuota esperada en la casa debe estar en rango y cubrir la mínima (1/prob),
+  // si no, la apuesta pierde plata a largo plazo. Sin mercado ('media', p. ej. córners): no conocemos el precio,
+  // así que se juzga por la cuota mínima que el usuario debe exigir en su casa.
   const ok = cands
-    .filter((c) => c.refOdds >= o.minOdds && c.refOdds <= o.maxOdds && c.prob >= o.minProb)
+    .filter((c) => {
+      if (c.prob < o.minProb) return false;
+      const odds = c.confidence === 'alta' ? c.refOdds : c.minOdds;
+      if (odds < o.minOdds || odds > o.maxOdds) return false;
+      return c.confidence !== 'alta' || c.refOdds >= c.minOdds;
+    })
     .sort((a, b) => b.prob - a.prob || b.prob - 1 / b.refOdds - (a.prob - 1 / a.refOdds));
   const chosen: Candidate[] = [];
   const perMatch = new Map<string, number>();

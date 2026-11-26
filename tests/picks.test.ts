@@ -147,7 +147,8 @@ const cand = (matchId: string, key: string, prob: number, refOdds: number, marke
 });
 
 test('choosePicks filtra por cuota 1.20–1.60 y probabilidad ≥ 70 %', () => {
-  const r = choosePicks([cand('m1', 'a', 0.9, 1.15), cand('m2', 'b', 0.6, 1.5), cand('m3', 'c', 0.69, 1.3), cand('m4', 'd', 0.75, 1.7), cand('m5', 'e', 0.8, 1.25)]);
+  const alta = (c: Candidate): Candidate => ({ ...c, confidence: 'alta' });
+  const r = choosePicks([cand('m1', 'a', 0.9, 1.15), cand('m2', 'b', 0.6, 1.5), cand('m3', 'c', 0.69, 1.3), cand('m4', 'd', 0.75, 1.7), cand('m5', 'e', 0.8, 1.25)].map(alta));
   assert.deepEqual(r.map((x) => x.key), ['e']);
 });
 
@@ -221,4 +222,15 @@ test('la cuota de referencia de mercados derivados sale del mercado (no de nuest
   const fair = fairProbs([odds.home, odds.draw, odds.away]);
   const x2 = c.find((x) => x.key === 'DC:X2')!;
   assert.ok(Math.abs(x2.refOdds - 1 / ((fair[1] + fair[2]) * 1.075)) < 0.01, `ref=${x2.refOdds}`);
+});
+
+test('choosePicks: con base de mercado exige que la cuota esperada cubra la mínima; sin mercado usa la mínima', () => {
+  const alta = (id: string, prob: number, ref: number) => ({ ...cand(id, 'x' + id, prob, ref), confidence: 'alta' as const });
+  const media = (id: string, prob: number, ref: number) => ({ ...cand(id, 'y' + id, prob, ref), confidence: 'media' as const });
+  // alta sin valor: ref 1.20 < mínima 1/0.8 = 1.25 → fuera
+  // alta con valor: ref 1.30 ≥ 1.25 → dentro
+  // media: se juzga por la mínima (1/0.8 = 1.25, dentro del rango) aunque su ref estimada sea 1.15
+  // media con mínima 1/0.65 = 1.54 pero prob < 0.70 → fuera
+  const r = choosePicks([alta('a', 0.8, 1.2), alta('b', 0.8, 1.3), media('c', 0.8, 1.15), media('d', 0.65, 1.4)]);
+  assert.deepEqual(r.map((x) => x.matchId).sort(), ['b', 'c']);
 });

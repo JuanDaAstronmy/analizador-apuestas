@@ -48,6 +48,8 @@ def parse_money(v):
         return None
     if re.fullmatch(r'\d{1,3}(\.\d{3})+(,\d+)?', s):
         s = s.replace('.', '').replace(',', '.')
+    elif re.fullmatch(r'\d{1,3}(,\d{3})+', s):
+        s = s.replace(',', '')
     else:
         s = s.replace(',', '.')
     try:
@@ -88,6 +90,12 @@ def fecha_hora(iso):
     return f"{DIAS[d.weekday()]} {d.strftime('%d/%m')} {h}:{d.strftime('%M')} {'am' if d.hour < 12 else 'pm'}"
 
 
+def confianza(p):
+    if p.get('confidence') != 'alta':
+        return 'Media: sin cuota de referencia, mira tu casa'
+    return 'Alta: cuota real del mercado' if p.get('hasMarketPrice') else 'Alta: cuota estimada desde el mercado'
+
+
 def pick_text(p):
     return f"{p['home']} vs {p['away']} — {p['label']} ({local_dt(p['date']).strftime('%d/%m')})"
 
@@ -111,8 +119,31 @@ def simulate_rule(historial, start):
     return bal
 
 
-def read_previous(path):
-    """Devuelve (saldo_inicial, filas) de la hoja 'Mis apuestas' del archivo anterior."""
+def read_previous(paths):
+    """(saldo_inicial, filas) combinando 'Mis apuestas' de uno o varios archivos anteriores (del más viejo al más
+    nuevo), sin repetir filas idénticas. El saldo inicial sale del último archivo que lo tenga."""
+    if isinstance(paths, (list, tuple)):
+        # Una fila es "la misma apuesta" si coinciden fecha, cuál, detalle, casa y monto; de ella se queda la
+        # versión del archivo más nuevo (donde el usuario pudo completar cuota, resultado o notas).
+        ident = lambda r: json.dumps([r['fecha'], r['cual'], r['detalle'], r['casa'], r['cuanto']], default=str)
+        # Si la misma apuesta aparece n veces en un archivo, son n apuestas: se conserva la cantidad mayor.
+        start, order, latest = SALDO_DEFECTO, [], {}
+        for p in paths:
+            st, rs = read_previous_one(p)
+            if p and os.path.exists(p):
+                start = st
+            groups = {}
+            for r in rs:
+                groups.setdefault(ident(r), []).append(r)
+            for k, new in groups.items():
+                old = latest.get(k, [])
+                latest[k] = new + old[len(new):]
+                order += [(k, i) for i in range(len(old), len(latest[k]))]
+        return start, [latest[k][i] for k, i in order]
+    return read_previous_one(paths)
+
+
+def read_previous_one(path):
     if not path or not os.path.exists(path):
         return SALDO_DEFECTO, []
     try:
@@ -165,28 +196,30 @@ def sheet_apuestas(ws, data, saldo):
     if data.get('nota'):
         ws['A4'] = data['nota']
         ws['A4'].font = Font(bold=True, color='9C0006')
-    cols = ['#', 'Fecha y hora (Colombia)', 'Liga', 'Partido', 'Apuesta', 'Tipo', 'Cuota de referencia',
-            'No apuestes si tu casa paga menos de', '¿Qué tan probable?', 'Cuánto apostar', 'Ganas si sale',
+    cols = ['#', 'Fecha y hora (Colombia)', 'Liga', 'Partido', 'Apuesta', 'Tipo', 'Cuota esperada en tu casa',
+            'Apuesta solo si tu casa paga al menos', '¿Qué tan probable?', 'Confianza', 'Cuánto apostar', 'Ganas si sale',
             'Pierdes si falla', '¿Por qué?', 'Aviso']
-    header(ws, 6, cols, [4, 16, 22, 28, 34, 16, 11, 14, 13, 12, 11, 11, 50, 24])
+    header(ws, 6, cols, [4, 16, 22, 28, 34, 16, 11, 14, 13, 22, 12, 11, 11, 50, 24])
     for i, p in enumerate(data['picks'], start=1):
         r = 6 + i
         fill = VERDE if p['prob'] >= 0.85 else AMARILLO if p['prob'] >= 0.78 else GRIS
         vals = [i, fecha_hora(p['date']), p.get('leagueName', p['league']),
-                f"{p['home']} vs {p['away']}", p['label'], p['market'], round(p['refOdds'], 2), round(p['minOdds'], 2),
-                veces(p['prob']),
-                f'=IF($B$2<{MINIMO},"—",ROUND(MIN($B$2,MAX({MINIMO},{META}*$B$2/(G{r}-1))),-1))',
-                f'=IF(ISNUMBER(J{r}),ROUND(J{r}*(G{r}-1),-1),"")', f'=IF(ISNUMBER(J{r}),J{r},"")', p['reason'],
-                f'=IF(AND(ISNUMBER(J{r}),J{r}>0.25*$B$2),"Esta apuesta es "&ROUND(J{r}/$B$2*100,0)&" % de tu saldo","")']
+                f"{p['home']} vs {p['away']}", p['label'], p['market'],
+                round(p['refOdds'], 2) if p.get('confidence') == 'alta' else '—', round(p['minOdds'], 2),
+                veces(p['prob']), confianza(p),
+                # El stake se calcula con la cuota mínima: si tu casa paga más, ganas un poco más.
+                f'=IF($B$2<{MINIMO},"—",ROUND(MIN($B$2,MAX({MINIMO},{META}*$B$2/(H{r}-1))),-1))',
+                f'=IF(ISNUMBER(K{r}),ROUND(K{r}*(H{r}-1),-1),"")', f'=IF(ISNUMBER(K{r}),K{r},"")', p['reason'],
+                f'=IF(AND(ISNUMBER(K{r}),K{r}>0.25*$B$2),"Esta apuesta es "&ROUND(K{r}/$B$2*100,0)&" % de tu saldo","")']
         for c, v in enumerate(vals, start=1):
             cell = ws.cell(r, c, v)
             cell.alignment = AJUSTE
             if c <= 9:
                 cell.fill = fill
-        for c in (10, 11, 12):
+        for c in (11, 12, 13):
             ws.cell(r, c).number_format = '$#,##0'
     last = 6 + max(1, len(data['picks']))
-    ws.conditional_formatting.add(f'J7:N{last}', FormulaRule(formula=['AND(ISNUMBER($J7),$J7>0.25*$B$2)'], fill=ROJO))
+    ws.conditional_formatting.add(f'K7:O{last}', FormulaRule(formula=['AND(ISNUMBER($K7),$K7>0.25*$B$2)'], fill=ROJO))
     ws.freeze_panes = 'A7'
 
 
@@ -194,7 +227,8 @@ def sheet_como_usar(ws):
     lines = [
         'Cómo usar este archivo',
         '1. Escribe tu saldo real en la celda amarilla de "Apuestas de hoy". Las apuestas se recalculan solas.',
-        '2. Antes de apostar, busca la misma apuesta en BetPlay o Rushbet y mira la cuota. Si es menor que "No apuestes si tu casa paga menos de", no la hagas.',
+        '2. Antes de apostar, busca la misma apuesta en BetPlay o Rushbet y mira la cuota. Si es menor que "Apuesta solo si tu casa paga al menos", no la hagas.',
+        '   "Confianza alta" = basada en las cuotas de las casas. "Confianza media" (córners, tarjetas) = no hay cuota de referencia: tú miras el precio en tu casa.',
         '3. Verde = las más seguras, amarillo = buenas, gris = alternativas. Ninguna es segura al 100 %.',
         '4. Haz una apuesta a la vez y espera el resultado antes de la siguiente.',
         '5. Si pierdes 2 seguidas, descansa hasta el próximo archivo.',
@@ -264,8 +298,8 @@ def sheet_mis_apuestas(ws, wb, start, prev_rows, picks, historial):
                 ws.cell(r, c, v)
         for c in range(1, 9):
             ws.cell(r, c).fill = EDITABLE
-        ws.cell(r, 9, f'=IF(B{r}="","",IFERROR(VLOOKUP(B{r},Listas!$A:$B,2,FALSE),""))')
-        ws.cell(r, 10, f'=IF(OR(E{r}="",G{r}=""),"",IF(G{r}="Sí",E{r}*(F{r}-1),IF(G{r}="No",-E{r},0)))')
+        ws.cell(r, 9, f'=IF(OR(B{r}="",B{r}="{OTRA}"),"",IFERROR(VLOOKUP(B{r},Listas!$A:$B,2,FALSE),""))')
+        ws.cell(r, 10, f'=IF(OR(E{r}="",G{r}=""),"",IF(G{r}="Sí",IF(F{r}="","",E{r}*(F{r}-1)),IF(G{r}="No",-E{r},0)))')
         ws.cell(r, 11, f'=IF(J{r}="","",$B$3+SUM($J${FIRST_ROW}:J{r}))')
         ws.cell(r, 12, f'=IF(OR(E{r}="",F{r}="",I{r}="",G{r}=""),"",E{r}*(I{r}*F{r}-1))')
         ws.cell(r, 13, f'=IF(K{r}="","",$B$3+SUM($L${FIRST_ROW}:L{r}))')
@@ -362,8 +396,18 @@ def write_history(wb, historial):
         ws.cell(i // CHUNK + 1, 1, text[i:i + CHUNK])
 
 
-def read_history(path):
-    """Historial guardado en la hoja oculta 'Datos' de un Excel anterior ([] si no hay)."""
+def read_history(paths):
+    """Historial guardado en la hoja oculta 'Datos' de uno o varios Excel anteriores ([] si no hay).
+    Con varios archivos combina por partido+apuesta y prefiere la versión ya liquidada."""
+    if isinstance(paths, (list, tuple)):
+        merged = {}
+        for p in paths:
+            for h in read_history(p):
+                k = f"{h.get('matchId')}#{h.get('key')}"
+                if k not in merged or (merged[k].get('resultado') == 'pendiente' and h.get('resultado') != 'pendiente'):
+                    merged[k] = h
+        return list(merged.values())
+    path = paths
     if not path or not os.path.exists(path):
         return []
     try:
@@ -397,7 +441,7 @@ def build(data, anterior, salida):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--picks', required=True)
-    ap.add_argument('--anterior')
+    ap.add_argument('--anterior', nargs='*', default=[], help='uno o varios Excel anteriores, del más viejo al más nuevo')
     ap.add_argument('--salida', required=True)
     a = ap.parse_args()
     with open(a.picks, encoding='utf-8') as f:

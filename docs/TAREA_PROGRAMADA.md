@@ -13,17 +13,19 @@ Colombia. Trabaja solo, sin hacer preguntas, y termina con un resumen de 3 líne
 3. Google Drive (conector Google Drive):
    - Busca la carpeta: search_files con `title = 'Apuestas Claude' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`.
      Si no existe, créala con create_file (contentMimeType no; mimeType de carpeta: `application/vnd.google-apps.folder`, title `Apuestas Claude`).
-   - Busca el Excel más reciente: search_files con `parentId = '<id carpeta>' and title contains 'Apuestas_' and trashed = false`,
-     orderBy `modifiedTime desc`, pageSize 1. Si existe, descárgalo con download_file_content y guárdalo
-     decodificado (base64) como /tmp/aa/salida/anterior.xlsx. Si es un Google Sheets (no .xlsx), descárgalo con
-     exportMimeType `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+   - Lista los Excel: search_files con `parentId = '<id carpeta>' and title contains 'Apuestas_' and trashed = false`.
+     Ordénalos por la FECHA DEL NOMBRE (Apuestas_AAAA-MM-DD_…), no por fecha de modificación, y toma los 2 más
+     recientes. Descarga cada uno con download_file_content y guárdalo decodificado (base64) como
+     /tmp/aa/salida/anterior1.xlsx (el más viejo) y /tmp/aa/salida/anterior2.xlsx (el más nuevo). Si alguno es un
+     Google Sheets (no .xlsx), descárgalo con exportMimeType `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+     Si solo hay uno o ninguno, usa los que haya.
 
 4. Genera:
    mkdir -p salida
-   python3 scripts/leer_historial.py salida/anterior.xlsx > salida/historial.json   # [] si no hay anterior
+   python3 scripts/leer_historial.py salida/anterior1.xlsx salida/anterior2.xlsx > salida/historial.json   # los que existan
    bash scripts/descargar_datos.sh /tmp/aa/datos
    npx tsx scripts/picks.ts --ventana <VENTANA> --fecha <FECHA> --datos /tmp/aa/datos --historial salida/historial.json --salida salida/picks.json
-   python3 scripts/build_xlsx.py --picks salida/picks.json --anterior salida/anterior.xlsx --salida salida/<archivo de picks.json>
+   python3 scripts/build_xlsx.py --picks salida/picks.json --anterior salida/anterior1.xlsx salida/anterior2.xlsx --salida salida/<archivo de picks.json>
    (si no hubo archivo anterior, los scripts lo manejan solos: historial vacío y saldo $2.200)
 
 5. Revisión antes de subir (si algo falla, corrígelo o explica en el resumen):
