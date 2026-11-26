@@ -214,3 +214,11 @@ test('settleAll no toca las ya liquidadas y mergeHistory no duplica', () => {
   assert.equal(twice.length, 1);
   assert.equal(twice[0].resultado, 'pendiente');
 });
+
+test('la cuota de referencia de mercados derivados sale del mercado (no de nuestra propia probabilidad)', () => {
+  const odds = { home: 5.75, draw: 3.85, away: 1.65, over25: 2.08, under25: 1.72 };
+  const c = buildCandidates({ league: 'SP1', date: FX_DATE, home: 'Equipo T', away: 'Equipo A', odds }, ctx(syntheticRows()));
+  const fair = fairProbs([odds.home, odds.draw, odds.away]);
+  const x2 = c.find((x) => x.key === 'DC:X2')!;
+  assert.ok(Math.abs(x2.refOdds - 1 / ((fair[1] + fair[2]) * 1.075)) < 0.01, `ref=${x2.refOdds}`);
+});

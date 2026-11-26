@@ -132,9 +132,11 @@ export function buildCandidates(fx: FixtureInput, ctx: LeagueContext): Candidate
   const M = scoreMatrix(base.lh * fH, base.la * fA);
   const M0 = withMarket ? scoreMatrix(base.lh, base.la) : undefined;
   const P = (m: number[][], f: (i: number, j: number) => boolean) => m.reduce((s, r, i) => s + r.reduce((t, v, j) => t + (f(i, j) ? v : 0), 0), 0);
+  let pendingMarket: number | undefined;
   const goalProb = (f: (i: number, j: number) => boolean) => {
     const p = P(M, f);
-    return M0 ? clamp(p, P(M0, f) - CLAMP, P(M0, f) + CLAMP) : p;
+    pendingMarket = M0 ? P(M0, f) : undefined;
+    return M0 ? clamp(p, pendingMarket! - CLAMP, pendingMarket! + CLAMP) : p;
   };
 
   const ref = fx.avgOdds ?? fx.odds;
@@ -144,13 +146,18 @@ export function buildCandidates(fx: FixtureInput, ctx: LeagueContext): Candidate
   const date = fx.date.toISOString();
   const matchId = `${fx.league}|${home}|${away}|${date.slice(0, 10)}`;
   const out: Candidate[] = [];
+  let marketProb: number | undefined;
   const add = (key: string, label: string, market: MarketName, prob: number, reason: string, conf: 'alta' | 'media') => {
+    marketProb = fair[key] ?? pendingMarket;
+    pendingMarket = undefined;
     if (fair[key] !== undefined) prob = clamp(prob, fair[key] - CLAMP, fair[key] + CLAMP);
     prob = clamp(fin(prob, 0), 0.0001, 0.9999);
     const mp = marketPrice[key];
     out.push({
       matchId, league: fx.league, date, home, away, key, label, market, prob,
-      refOdds: mp && mp > 1 ? mp : 1 / (prob * BETPLAY_MARGIN),
+      // Cuota estimada en la casa: precio real si lo hay; si no, la probabilidad del MERCADO con el margen típico de BetPlay
+      // (sin mercado, la nuestra). Así "no apuestes si paga menos de" (1/prob) compara nuestra opinión con el precio esperado.
+      refOdds: mp && mp > 1 ? mp : 1 / (clamp(fin(marketProb ?? prob, prob), 0.0001, 0.9999) * BETPLAY_MARGIN),
       minOdds: 1 / prob,
       hasMarketPrice: !!(mp && mp > 1),
       confidence: withMarket && conf === 'alta' ? 'alta' : 'media',
