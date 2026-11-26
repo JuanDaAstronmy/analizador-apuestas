@@ -350,6 +350,33 @@ def sheet_historial(ws, historial):
     ws.freeze_panes = f'A{top + 1}'
 
 
+CHUNK = 30000  # una celda de Excel admite hasta 32.767 caracteres
+
+
+def write_history(wb, historial):
+    """Guarda el historial completo (JSON) en una hoja oculta para que la próxima ejecución lo lea."""
+    ws = wb.create_sheet('Datos')
+    ws.sheet_state = 'hidden'
+    text = json.dumps(historial, ensure_ascii=False)
+    for i in range(0, max(1, len(text)), CHUNK):
+        ws.cell(i // CHUNK + 1, 1, text[i:i + CHUNK])
+
+
+def read_history(path):
+    """Historial guardado en la hoja oculta 'Datos' de un Excel anterior ([] si no hay)."""
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        ws = load_workbook(path)['Datos']
+    except Exception:
+        return []
+    text = ''.join(str(c.value) for c in ws['A'] if c.value)
+    try:
+        return json.loads(text) if text else []
+    except ValueError:
+        return []
+
+
 def build(data, anterior, salida):
     start, prev_rows = read_previous(anterior)
     saldo = current_balance(start, prev_rows) if prev_rows else start
@@ -362,6 +389,7 @@ def build(data, anterior, salida):
     hist = wb.create_sheet('Historial')
     sheet_mis_apuestas(mis, wb, start, prev_rows, data['picks'], data.get('historial', []))
     sheet_historial(hist, data.get('historial', []))
+    write_history(wb, data.get('historial', []))
     os.makedirs(os.path.dirname(os.path.abspath(salida)), exist_ok=True)
     wb.save(salida)
 

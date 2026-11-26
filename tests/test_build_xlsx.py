@@ -81,6 +81,15 @@ class TestBuildXlsx(unittest.TestCase):
             for xml in charts:
                 self.assertIn('plotVisOnly val="0"', xml)
 
+    def test_historial_viaja_dentro_del_excel(self):
+        hist = [dict(PICK, archivo='a.xlsx', resultado='ganada', marcador='2-1', reason='x' * 40000)]
+        with tempfile.TemporaryDirectory() as d:
+            _, out = build(d, write_picks(d, [PICK], historial=hist))
+            self.assertEqual(build_xlsx.read_history(out), hist)
+            self.assertEqual(build_xlsx.read_history(os.path.join(d, 'no-existe.xlsx')), [])
+            r = subprocess.run([sys.executable, os.path.join(ROOT, 'scripts', 'leer_historial.py'), out], capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(r.stdout), hist)
+
     def test_lectura_de_plata_y_cuotas(self):
         self.assertEqual(build_xlsx.parse_money('$2.200'), 2200)
         self.assertEqual(build_xlsx.parse_money('500'), 500)
