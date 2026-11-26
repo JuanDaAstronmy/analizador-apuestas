@@ -105,7 +105,7 @@ npm run backtest -- --perfil conservador --peso 0.35 E0_2425.csv E0_2526.csv E0_
   se publica pocos días antes de cada jornada.
 - **Copia en GitHub:** football-data.co.uk está bloqueado en algunas redes de Colombia. El workflow
   `.github/workflows/datos.yml` copia los CSV a la release `datos` de este repositorio todos los días
-  miércoles y viernes (o cuando lo corres a mano en la pestaña *Actions → Actualizar datos → Run workflow*).
+  (o cuando lo corres a mano en la pestaña *Actions → Actualizar datos → Run workflow*).
   La app descarga primero esa copia y, si falla, va al sitio original.
 - **La Liga BetPlay (Colombia) no está en esa fuente.** Opciones para agregarla: API-Football
   (api-sports.io, plan gratis de 100 consultas/día con API key) o cargar un CSV propio.
