@@ -34,7 +34,8 @@ Colombia. Trabaja solo, sin hacer preguntas, y termina con un resumen de 3 líne
    (si no hubo archivo anterior, los scripts lo manejan solos: historial vacío y saldo $2.200)
 
 5. Revisión antes de subir (si algo falla, corrígelo o explica en el resumen):
-   - picks.json: cada recomendación con cuota entre 1.20 y 1.60, probabilidad ≥ 0.70, sin NaN, máximo 10, máximo 2 por partido.
+   - picks.json: probabilidad ≥ 0.70, sin NaN, máximo 10, máximo 2 por partido; confianza "alta" con refOdds entre 1.20 y 1.60
+     y refOdds ≥ minOdds; confianza "media" con minOdds entre 1.20 y 1.60.
    - Los textos de "Apuesta" y "¿Por qué?" se entienden sin saber de apuestas.
    - Si no hay partidos, el archivo debe traer la nota explicándolo (es normal en fechas FIFA).
 
