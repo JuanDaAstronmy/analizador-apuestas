@@ -137,3 +137,45 @@ test('textos en lenguaje sencillo', () => {
   }
   assert.ok(c.find((x) => x.key === '1X2:1')!.label.includes('Equipo A'));
 });
+
+import { choosePicks, windowFor } from '../src/picks/select';
+import type { Candidate } from '../src/picks/candidates';
+
+const cand = (matchId: string, key: string, prob: number, refOdds: number, market: Candidate['market'] = 'Goles'): Candidate => ({
+  matchId, league: 'E0', date: '2026-11-28T15:00:00.000Z', home: 'A', away: 'B', key, label: key, market, prob, refOdds,
+  minOdds: 1 / prob, hasMarketPrice: false, confidence: 'media', reason: 'x'.repeat(12),
+});
+
+test('choosePicks filtra por cuota 1.20–1.60 y probabilidad ≥ 70 %', () => {
+  const r = choosePicks([cand('m1', 'a', 0.9, 1.15), cand('m2', 'b', 0.6, 1.5), cand('m3', 'c', 0.69, 1.3), cand('m4', 'd', 0.75, 1.7), cand('m5', 'e', 0.8, 1.25)]);
+  assert.deepEqual(r.map((x) => x.key), ['e']);
+});
+
+test('choosePicks: máximo 2 por partido, 10 en total y ordenadas por probabilidad', () => {
+  const cs: Candidate[] = [];
+  for (let m = 0; m < 8; m++) for (let k = 0; k < 4; k++) cs.push(cand(`m${m}`, `k${m}-${k}`, 0.7 + m * 0.01 + k * 0.001, 1.3));
+  const r = choosePicks(cs);
+  assert.equal(r.length, 10);
+  const per = new Map<string, number>();
+  for (const x of r) per.set(x.matchId, (per.get(x.matchId) ?? 0) + 1);
+  assert.ok([...per.values()].every((n) => n <= 2));
+  for (let i = 1; i < r.length; i++) assert.ok(r[i - 1].prob >= r[i].prob);
+});
+
+test('windowFor en hora de Colombia', () => {
+  const j = windowFor('jueves', new Date('2026-11-26T12:00:00Z'));
+  assert.equal(j.from.toISOString(), '2026-11-27T05:00:00.000Z');
+  assert.equal(j.to.toISOString(), '2026-11-30T04:59:59.999Z');
+  const l = windowFor('lunes', new Date('2026-11-30T12:00:00Z'));
+  assert.equal(l.from.toISOString(), '2026-11-30T05:00:00.000Z');
+  assert.equal(l.to.toISOString(), '2026-12-04T04:59:59.999Z');
+});
+
+test('windowFor también soporta martes (mar→jue) y viernes (vie→lun)', () => {
+  const m = windowFor('martes', new Date('2026-12-01T12:00:00Z'));
+  assert.equal(m.from.toISOString(), '2026-12-01T05:00:00.000Z');
+  assert.equal(m.to.toISOString(), '2026-12-04T04:59:59.999Z');
+  const v = windowFor('viernes', new Date('2026-11-27T12:00:00Z'));
+  assert.equal(v.from.toISOString(), '2026-11-27T05:00:00.000Z');
+  assert.equal(v.to.toISOString(), '2026-12-01T04:59:59.999Z');
+});
