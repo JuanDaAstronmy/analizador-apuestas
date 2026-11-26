@@ -5,7 +5,7 @@ name: Actualizar datos
 
 on:
   schedule:
-    - cron: '23 11 * * 1,3,5'   # lunes, miércoles y viernes (06:23 en Colombia)
+    - cron: '23 11 * * *'   # todos los días (06:23 en Colombia)
   workflow_dispatch:            # botón "Run workflow" en la pestaña Actions
   push:
     branches: [main]
@@ -30,9 +30,9 @@ jobs:
           }
           for i in 0 1 2; do
             s=$(printf '%02d%02d' $(( (start-i) % 100 )) $(( (start-i+1) % 100 )))
-            for lg in E0 SP1 I1 D1 F1 N1 P1 E1 T1; do get "mmz4281/$s/$lg.csv"; done
+            for lg in E0 E1 SP1 SP2 I1 I2 D1 D2 F1 F2 N1 P1 B1 G1 T1 SC0; do get "mmz4281/$s/$lg.csv"; done
           done
-          for lg in ARG BRA MEX USA; do get "new/$lg.csv"; done
+          for lg in ARG BRA MEX USA AUT DNK FIN IRL JPN NOR POL ROU SWE SWZ CHN; do get "new/$lg.csv"; done
           get fixtures.csv
           get new_league_fixtures.csv
           echo "Archivos descargados: $ok"
