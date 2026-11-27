@@ -6,6 +6,11 @@ name: Actualizar datos
 on:
   schedule:
     - cron: '23 11 * * *'   # todos los días (06:23 en Colombia)
+    # Martes y viernes la fuente publica los partidos hacia las 4:30–5:30 am (Colombia). GitHub a veces atrasa
+    # horas las corridas programadas, así que esos días se intenta varias veces antes de la tarea de las 8:43.
+    - cron: '47 10 * * 2,5'  # 05:47 Colombia
+    - cron: '7 12 * * 2,5'   # 07:07 Colombia
+    - cron: '37 12 * * 2,5'  # 07:37 Colombia
   workflow_dispatch:            # botón "Run workflow" en la pestaña Actions
   push:
     branches: [main]
