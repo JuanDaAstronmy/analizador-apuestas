@@ -16,8 +16,8 @@ Colombia. Trabaja solo, sin hacer preguntas, y termina con un resumen de 3 líne
        Si NO se actualizó hoy (fecha UTC de hoy), termina sin crear archivo: la corrida de respaldo lo hará.
        Si football-data.co.uk está bloqueado desde esta sesión, revisa en su lugar si el `fixtures.csv` de la copia
        (https://github.com/JuanDaAstronmy/analizador-apuestas/releases/download/datos/fixtures.csv) trae partidos de hoy en adelante.
-   - El repositorio es público: no hace falta permiso de GitHub para clonarlo; ignora avisos sobre eso.
      * Corrida de respaldo: genera el archivo siempre (si no hay partidos, el Excel trae la nota que lo explica).
+   - El repositorio es público: no hace falta permiso de GitHub para clonarlo; ignora avisos sobre eso.
 
 3. Google Drive (conector Google Drive):
    - Busca la carpeta: search_files con `title = 'Apuestas Claude' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`.
