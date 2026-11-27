@@ -9,10 +9,14 @@ Colombia. Trabaja solo, sin hacer preguntas, y termina con un resumen de 3 líne
    - Martes → ventana `martes` (partidos de martes a jueves). Viernes → ventana `viernes` (viernes a lunes).
      Otro día (ejecución manual): usa `martes` si es lunes–jueves y `viernes` si es viernes–domingo.
    - FECHA = fecha de hoy en Colombia (YYYY-MM-DD). El archivo se llamará `Apuestas_<FECHA>_<ventana>.xlsx`.
-   - Esta tarea corre dos veces esos días: 5:13 am (temprana) y 8:13 am (respaldo).
+   - Esta tarea corre dos veces esos días: 5:43 am (temprana) y 8:43 am (respaldo). La fuente publica los partidos
+     hacia las 4:30–5:30 am (hora Colombia).
      * Si ya existe en Drive un archivo con el nombre de hoy (paso 3), termina sin hacer nada.
      * Corrida temprana (antes de las 7 am): revisa `curl -sI https://football-data.co.uk/fixtures.csv` (Last-Modified).
        Si NO se actualizó hoy (fecha UTC de hoy), termina sin crear archivo: la corrida de respaldo lo hará.
+       Si football-data.co.uk está bloqueado desde esta sesión, revisa en su lugar si el `fixtures.csv` de la copia
+       (https://github.com/JuanDaAstronmy/analizador-apuestas/releases/download/datos/fixtures.csv) trae partidos de hoy en adelante.
+   - El repositorio es público: no hace falta permiso de GitHub para clonarlo; ignora avisos sobre eso.
      * Corrida de respaldo: genera el archivo siempre (si no hay partidos, el Excel trae la nota que lo explica).
 
 3. Google Drive (conector Google Drive):
